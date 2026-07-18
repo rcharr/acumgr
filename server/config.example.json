@@ -1,0 +1,14 @@
+{
+  "_instructions": "Copy this file to config.json and fill in your details. Or run: node setup.js",
+  "managerAddress": "5YourManagerAddressHere...",
+  "port": 9001,
+  "pollMinutes": 30,
+  "rpc": "wss://public-rpc.mainnet.acurast.com",
+  "computePallet": "5EYCAe5g86uWAqpCzj2AMUzgybxYTycRNNxSBK17aziwTZAH",
+  "epochLength": 900,
+  "processors": [
+    "5Processor1AddressHere...",
+    "5Processor2AddressHere...",
+    "ADD ALL YOUR PROCESSOR ADDRESSES HERE"
+  ]
+}

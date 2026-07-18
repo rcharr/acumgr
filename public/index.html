@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+<meta http-equiv="Pragma" content="no-cache"/>
+<meta http-equiv="Expires" content="0"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Acurast Processor Manager</title>
+<meta name="version" content="1784374981"/>
+<style>
+  :root {
+    --bg:#0b0f1a;--surface:#131929;--surface2:#1a2340;--border:#243050;
+    --accent:#4f8ef7;--accent2:#7c5ef7;--green:#22c55e;--yellow:#eab308;
+    --red:#ef4444;--text:#e2e8f0;--muted:#64748b;--radius:10px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text);font-family:'Inter','Segoe UI',system-ui,sans-serif;font-size:14px;min-height:100vh;}
+  header{background:var(--surface);border-bottom:1px solid var(--border);padding:18px 28px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;}
+  .logo{display:flex;align-items:center;gap:12px;}
+  .logo-icon{width:40px;height:40px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:10px;display:grid;place-items:center;font-size:20px;}
+  .logo h1{font-size:18px;font-weight:700;}
+  .logo p{font-size:11px;color:var(--muted);margin-top:2px;}
+  .header-right{display:flex;align-items:center;gap:12px;}
+  .last-updated{font-size:11px;color:var(--muted);}
+  #refreshBtn{background:var(--accent);color:#fff;border:none;border-radius:7px;padding:8px 16px;cursor:pointer;font-size:13px;font-weight:600;}
+  #refreshBtn:hover{opacity:.85;}
+  #refreshBtn:disabled{opacity:.4;cursor:not-allowed;}
+  main{padding:24px 28px;max-width:1500px;margin:0 auto;}
+  .mgr-bar{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 18px;display:flex;align-items:center;gap:10px;margin-bottom:18px;flex-wrap:wrap;}
+  .mgr-bar .lbl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;}
+  .mgr-bar .mgr-addr{font-family:'Courier New',monospace;font-size:12px;color:var(--accent);word-break:break-all;}
+  .copy-btn{background:var(--surface2);border:1px solid var(--border);color:var(--muted);border-radius:5px;padding:2px 8px;font-size:11px;cursor:pointer;}
+  .copy-btn:hover{color:var(--text);}
+  .net-bar{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 20px;display:flex;align-items:center;gap:12px;margin-bottom:18px;flex-wrap:wrap;}
+  .conn-dot{width:9px;height:9px;border-radius:50%;background:var(--muted);flex-shrink:0;}
+  .conn-dot.ok{background:var(--green);box-shadow:0 0 7px var(--green);}
+  .conn-dot.err{background:var(--red);}
+  .net-label{font-size:12px;font-weight:600;color:var(--accent);}
+  .net-detail{font-size:11px;color:var(--muted);}
+  .net-bal{font-size:13px;font-weight:600;margin-left:auto;}
+  .error-banner{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);color:var(--red);border-radius:var(--radius);padding:12px 18px;margin-bottom:18px;font-size:13px;display:none;}
+  .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:24px;}
+  .stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px;}
+  .stat-card .label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;}
+  .stat-card .value{font-size:28px;font-weight:700;}
+  .value.green{color:var(--green);} .value.yellow{color:var(--yellow);} .value.red{color:var(--red);} .value.accent{color:var(--accent);}
+  .table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;}
+  .table-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:10px;}
+  .table-header h2{font-size:15px;font-weight:600;}
+  .filters{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+  .filters select,.filters input{background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 10px;font-size:12px;}
+  table{width:100%;border-collapse:collapse;}
+  th{background:var(--surface2);text-align:left;padding:10px 14px;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:600;border-bottom:1px solid var(--border);white-space:nowrap;}
+  td{padding:11px 14px;border-bottom:1px solid var(--border);font-size:13px;vertical-align:middle;}
+  tr:last-child td{border-bottom:none;}
+  tr:hover td{background:var(--surface2);}
+  .addr{font-family:'Courier New',monospace;font-size:12px;color:var(--accent);}
+  .status-pill{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;}
+  .status-pill.online{background:rgba(34,197,94,.15);color:var(--green);}
+  .status-pill.degraded{background:rgba(234,179,8,.15);color:var(--yellow);}
+  .status-pill.offline{background:rgba(239,68,68,.15);color:var(--red);}
+  .status-pill.unknown{background:rgba(100,116,139,.15);color:var(--muted);}
+  .status-dot{width:6px;height:6px;border-radius:50%;background:currentColor;}
+  .no-data{text-align:center;padding:60px 20px;color:var(--muted);}
+  #loading{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:100;}
+  .spinner{width:44px;height:44px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .score-bar{display:flex;align-items:center;gap:6px;}
+  .score-bar .bar{height:4px;border-radius:2px;background:var(--accent);min-width:2px;}
+
+  .chart-section{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:22px;margin-bottom:24px;}
+  .chart-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;}
+  .chart-header h2{font-size:15px;font-weight:600;}
+  .chart-meta{display:flex;gap:20px;align-items:center;flex-wrap:wrap;}
+  .chart-meta .pill{font-size:12px;font-weight:600;padding:4px 12px;border-radius:20px;background:var(--surface2);border:1px solid var(--border);}
+  .chart-meta .pill.acu{color:var(--accent);}
+  .chart-meta .pill.usd{color:var(--green);}
+  .chart-meta .pill.price{color:var(--muted);}
+  .chart-range{display:flex;gap:6px;}
+  .range-btn{background:var(--surface2);border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;}
+  .range-btn.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+  #incomeCanvas{width:100%!important;height:260px!important;}
+</style>
+</head>
+<body>
+<div id="loading">
+  <div class="spinner"></div>
+  <div style="color:var(--muted);font-size:13px">Connecting to Acurast Mainnet...</div>
+</div>
+<header>
+  <div class="logo">
+    <div class="logo-icon">⚡</div>
+    <div>
+      <h1>Acurast Processor Manager</h1>
+      <p id="dashUrl">Mainnet Dashboard — loading...</p>
+    </div>
+  </div>
+  <div class="header-right">
+    <span class="last-updated" id="lastUpdated">—</span>
+    <button id="refreshBtn" onclick="manualRefresh()">↻ Refresh</button>
+  </div>
+</header>
+<main>
+  <div class="mgr-bar">
+    <span class="lbl">Manager</span>
+    <span class="mgr-addr" id="mgrAddr">—</span>
+    <button class="copy-btn" onclick="copyAddr()">Copy</button>
+  </div>
+  <div class="error-banner" id="errBanner"></div>
+  <div class="net-bar">
+    <span class="conn-dot" id="dotMainnet"></span>
+    <span class="net-label">Mainnet</span>
+    <span class="net-detail">wss://public-rpc.mainnet.acurast.com</span>
+    <span class="net-bal" id="netBal">— ACU</span>
+  </div>
+  <div class="stats-grid">
+    <div class="stat-card"><div class="label">Total Processors</div><div class="value accent" id="statTotal">—</div></div>
+    <div class="stat-card"><div class="label">Online</div><div class="value green" id="statOnline">—</div></div>
+    <div class="stat-card"><div class="label">Degraded</div><div class="value yellow" id="statDegraded">—</div></div>
+    <div class="stat-card"><div class="label">Offline / Unknown</div><div class="value red" id="statOffline">—</div></div>
+    <div class="stat-card"><div class="label">Manager Balance</div><div class="value accent" id="statBal">—</div></div>
+    <div class="stat-card"><div class="label">Current Epoch</div><div class="value accent" id="statEpoch">—</div></div>
+    <div class="stat-card"><div class="label">Fleet Reward This Epoch</div><div class="value accent" id="statFleetReward">—</div></div>
+    <div class="stat-card"><div class="label">Last Epoch Payout</div><div class="value green" id="statLastPayout">—</div></div>
+  </div>
+
+  <div class="chart-section">
+    <div class="chart-header">
+      <div>
+        <h2>Cumulative Income</h2>
+      </div>
+      <div class="chart-meta">
+        <span class="pill price" id="pillPrice">ACU $—</span>
+        <span class="pill acu" id="pillAcu">— ACU total</span>
+        <span class="pill usd" id="pillUsd">$— USD total</span>
+        <div class="chart-range">
+          <button class="range-btn active" onclick="setRange(7,this)">7D</button>
+          <button class="range-btn" onclick="setRange(14,this)">14D</button>
+          <button class="range-btn" onclick="setRange(30,this)">30D</button>
+          <button class="range-btn" onclick="setRange(0,this)">All</button>
+        </div>
+      </div>
+    </div>
+    <canvas id="incomeCanvas"></canvas>
+  </div>
+
+  <div class="table-wrap">
+    <div class="table-header">
+      <h2>Processors <span id="tableCount" style="color:var(--muted);font-weight:400;font-size:13px"></span></h2>
+      <div class="filters">
+        <select id="filterStatus" onchange="renderTable()">
+          <option value="all">All Status</option>
+          <option value="online">Online</option>
+          <option value="degraded">Degraded</option>
+          <option value="offline">Offline</option>
+          <option value="unknown">Unknown</option>
+        </select>
+        <input type="text" id="filterSearch" placeholder="Search address..." oninput="renderTable()"/>
+      </div>
+    </div>
+    <div style="overflow-x:auto">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Address</th>
+            <th>Status</th>
+            <th>Last Heartbeat</th>
+            <th>Balance (ACU)</th>
+            <th>Compute Score</th>
+            <th>Reward / Epoch</th>
+            <th>Epoch</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+  </div>
+</main>
+<script>
+let allProcessors = [];
+let maxScore = 1;
+
+function fmt(v){ return (v===null||v===undefined)?'<span style="color:var(--muted)">—</span>':v; }
+
+function timeAgo(s){
+  if(s===null||s===undefined) return '—';
+  if(s<0) return 'just now';
+  if(s<60) return s+'s ago';
+  if(s<3600) return Math.floor(s/60)+'m ago';
+  if(s<86400) return Math.floor(s/3600)+'h '+Math.floor((s%3600)/60)+'m ago';
+  return Math.floor(s/86400)+'d ago';
+}
+
+function statusPill(status){
+  const s=status||'unknown';
+  return '<span class="status-pill '+s+'"><span class="status-dot"></span>'+s.charAt(0).toUpperCase()+s.slice(1)+'</span>';
+}
+
+function shortAddr(addr){ return addr?addr.slice(0,8)+'...'+addr.slice(-6):'—'; }
+
+function scoreBar(score){
+  if(score===null||score===undefined) return '<span style="color:var(--muted)">—</span>';
+  const pct = Math.min(100, Math.round((score / maxScore) * 100));
+  const w = Math.max(4, Math.round(pct * 0.8));
+  return '<div class="score-bar"><div class="bar" style="width:'+w+'px"></div><span>'+score.toLocaleString()+'</span></div>';
+}
+
+function fmtReward(rewardContribution){
+  if(!rewardContribution) return '<span style="color:var(--muted)">—</span>';
+  return (rewardContribution / 1e12).toFixed(4) + ' ACU';
+}
+
+function renderTable(){
+  const tbody=document.getElementById('tableBody');
+  const filterStatus=document.getElementById('filterStatus').value;
+  const filterSearch=document.getElementById('filterSearch').value.toLowerCase();
+
+  const filtered=allProcessors.filter(p=>{
+    if(filterStatus!=='all'&&(p.status||'unknown')!==filterStatus) return false;
+    if(filterSearch&&!p.address.toLowerCase().includes(filterSearch)) return false;
+    return true;
+  });
+
+  document.getElementById('tableCount').textContent='('+filtered.length+')';
+
+  if(filtered.length===0){
+    tbody.innerHTML='<tr><td colspan="8"><div class="no-data"><p>No processors match filter.</p></div></td></tr>';
+    return;
+  }
+
+  tbody.innerHTML=filtered.map((p,i)=>`
+    <tr>
+      <td style="color:var(--muted)">${i+1}</td>
+      <td>
+        <span class="addr" title="${p.address}">${shortAddr(p.address)}</span>
+        <button class="copy-btn" onclick="navigator.clipboard.writeText('${p.address}')" style="margin-left:6px">Copy</button>
+      </td>
+      <td>${statusPill(p.status)}</td>
+      <td>${timeAgo(p.lastHeartbeatAgo)}</td>
+      <td>${fmt(p.balance)}</td>
+      <td>${scoreBar(p.computeScore)}</td>
+      <td>${fmtReward(p.rewardContribution)}</td>
+      <td>${fmt(p.epoch)}</td>
+    </tr>`).join('');
+}
+
+async function fetchData(){
+  try {
+    const res  = await fetch('/api/status');
+    const data = await res.json();
+
+    document.getElementById('mgrAddr').textContent = data.managerAddress || '—';
+    if(data.lastUpdated){
+      document.getElementById('lastUpdated').textContent = 'Updated '+new Date(data.lastUpdated).toLocaleTimeString();
+    }
+
+    document.getElementById('dotMainnet').className = 'conn-dot'+(data.rpcConnected?' ok':' err');
+    const bal = data.managerBalance;
+    document.getElementById('netBal').textContent  = bal ? bal+' ACU' : '— ACU';
+    document.getElementById('statBal').textContent = bal ? bal+' ACU' : '—';
+
+    const errBanner = document.getElementById('errBanner');
+    if(!data.rpcConnected){
+      errBanner.style.display='block';
+      errBanner.textContent='⚠ Mainnet RPC connection is down. The server retries every 60s.';
+    } else {
+      errBanner.style.display='none';
+    }
+
+    const procs = data.processors || [];
+    allProcessors = procs;
+
+    // Find max compute score for bar scaling
+    maxScore = Math.max(1, ...procs.map(p => p.computeScore || 0));
+
+    // Current epoch
+    const epochs = procs.map(p => p.epoch).filter(Boolean);
+    if(epochs.length) document.getElementById('statEpoch').textContent = Math.max(...epochs);
+
+    // Fleet reward this epoch
+    if(data.fleetRewardThisEpoch != null) {
+      document.getElementById('statFleetReward').textContent = data.fleetRewardThisEpoch.toFixed(4) + ' ACU';
+    }
+
+    // Last epoch payout
+    if(data.lastEpochPayout) {
+      document.getElementById('statLastPayout').textContent = data.lastEpochPayout.amount.toFixed(4) + ' ACU';
+      document.getElementById('statLastPayout').title = 'Block ' + data.lastEpochPayout.block;
+    }
+
+    const online   = procs.filter(p=>p.status==='online').length;
+    const degraded = procs.filter(p=>p.status==='degraded').length;
+    const offline  = procs.filter(p=>p.status==='offline'||p.status==='unknown').length;
+
+    document.getElementById('statTotal').textContent    = procs.length;
+    document.getElementById('statOnline').textContent   = online;
+    document.getElementById('statDegraded').textContent = degraded;
+    document.getElementById('statOffline').textContent  = offline;
+
+    renderTable();
+    await updateChart(data.acuPrice, data.lastEpochPayout, data.managerBalance);
+    document.getElementById('loading').style.display='none';
+  } catch(e) {
+    console.error('fetchData error:', e);
+  }
+}
+
+async function manualRefresh(){
+  const btn=document.getElementById('refreshBtn');
+  btn.disabled=true; btn.textContent='↻ Refreshing...';
+  try{
+    await fetch('/api/refresh',{method:'POST'});
+    await new Promise(r=>setTimeout(r,3500));
+    await fetchData();
+  } finally {
+    btn.disabled=false; btn.textContent='↻ Refresh';
+  }
+}
+
+function copyAddr(){
+  navigator.clipboard.writeText(document.getElementById('mgrAddr').textContent)
+    .then(()=>alert('Manager address copied!'));
+}
+
+
+// ─── Income Chart ──────────────────────────────────────────────────────────────
+let chartRange = 7;
+let acuPriceCurrent = null;
+let serverHistory = [];  // fetched from /api/history — same on all devices
+
+function setRange(days, btn) {
+  chartRange = days;
+  document.querySelectorAll('.range-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  drawChart();
+}
+
+async function loadHistory() {
+  try {
+    const res = await fetch('/api/history');
+    const data = await res.json();
+    serverHistory = data.history || [];
+  } catch(_) { serverHistory = []; }
+}
+
+function drawChart() {
+  const canvas = document.getElementById('incomeCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const W = canvas.offsetWidth || 800;
+  const H = 280;
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  canvas.style.height = H + 'px';
+  ctx.scale(dpr, dpr);
+
+  let data = chartRange > 0 ? serverHistory.slice(-chartRange) : serverHistory;
+
+  if (data.length === 0) {
+    ctx.fillStyle = '#64748b';
+    ctx.font = '13px Inter,sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('No history yet — accumulates with each 30-min refresh', W/2, H/2);
+    return;
+  }
+
+  const price = acuPriceCurrent || 0;
+
+  let cumIncome = 0;
+  const points = data.map(entry => {
+    const dayEarned = (entry.payouts || []).reduce((s, p) => s + p.a, 0);
+    cumIncome += dayEarned;
+    return { date: entry.d.slice(5), income: cumIncome, bal: entry.bal };
+  });
+
+  const validBals = points.map(p => p.bal).filter(v => v != null);
+  const maxBal    = validBals.length ? Math.max(...validBals) * 1.05 : 1;
+  const minBal    = validBals.length ? Math.min(...validBals) * 0.95 : 0;
+  const maxIncome = Math.max(0.001, ...points.map(p => p.income)) * 1.1;
+
+  const PAD = { top: 24, right: 74, bottom: 40, left: 74 };
+  const gW = W - PAD.left - PAD.right;
+  const gH = H - PAD.top - PAD.bottom;
+  const n = points.length;
+  const gStep = n > 1 ? gW / (n - 1) : 0;
+  const xOf = i => PAD.left + i * gStep;
+  const yOfIncome = v => PAD.top + gH - (v / maxIncome) * gH;
+  const yOfBal = v => PAD.top + gH - (((v - minBal) / (maxBal - minBal || 1)) * gH);
+
+  ctx.clearRect(0, 0, W, H);
+
+  // Grid
+  ctx.strokeStyle = '#1a2340'; ctx.lineWidth = 1;
+  for (let i = 0; i <= 5; i++) {
+    const y = PAD.top + (gH/5)*i;
+    ctx.beginPath(); ctx.moveTo(PAD.left, y); ctx.lineTo(W-PAD.right, y); ctx.stroke();
+  }
+  const vStep = Math.max(1, Math.ceil(n/6));
+  for (let i = 0; i < n; i += vStep) {
+    ctx.beginPath(); ctx.moveTo(xOf(i), PAD.top); ctx.lineTo(xOf(i), PAD.top+gH); ctx.stroke();
+  }
+
+  // Balance line (green, right axis)
+  if (validBals.length > 0) {
+    ctx.beginPath(); ctx.strokeStyle = '#22c55e'; ctx.lineWidth = 2;
+    let started = false;
+    points.forEach((p, i) => {
+      if (p.bal == null) return;
+      const x = xOf(i), y = yOfBal(p.bal);
+      if (!started) { ctx.moveTo(x,y); started=true; } else ctx.lineTo(x,y);
+    });
+    ctx.stroke();
+    ctx.fillStyle = '#22c55e';
+    points.forEach((p,i) => {
+      if (p.bal==null) return;
+      ctx.beginPath(); ctx.arc(xOf(i),yOfBal(p.bal),3,0,Math.PI*2); ctx.fill();
+    });
+  }
+
+  // Income line (blue, left axis) + fill
+  ctx.beginPath(); ctx.strokeStyle='#4f8ef7'; ctx.lineWidth=2.5;
+  points.forEach((p,i) => { i===0?ctx.moveTo(xOf(i),yOfIncome(p.income)):ctx.lineTo(xOf(i),yOfIncome(p.income)); });
+  ctx.stroke();
+  ctx.beginPath();
+  points.forEach((p,i) => { i===0?ctx.moveTo(xOf(i),yOfIncome(p.income)):ctx.lineTo(xOf(i),yOfIncome(p.income)); });
+  ctx.lineTo(xOf(n-1),PAD.top+gH); ctx.lineTo(PAD.left,PAD.top+gH); ctx.closePath();
+  ctx.fillStyle='rgba(79,142,247,0.07)'; ctx.fill();
+  ctx.fillStyle='#4f8ef7';
+  points.forEach((p,i) => { ctx.beginPath(); ctx.arc(xOf(i),yOfIncome(p.income),3,0,Math.PI*2); ctx.fill(); });
+
+  // Left Y axis
+  ctx.fillStyle='#4f8ef7'; ctx.font='10px Inter,sans-serif'; ctx.textAlign='right';
+  for (let i=0;i<=4;i++) { const v=(maxIncome/4)*(4-i); ctx.fillText(v.toFixed(2),PAD.left-6,PAD.top+(gH/4)*i+4); }
+  ctx.save(); ctx.translate(14,PAD.top+gH/2); ctx.rotate(-Math.PI/2);
+  ctx.textAlign='center'; ctx.fillStyle='#4f8ef7'; ctx.font='10px Inter,sans-serif'; ctx.fillText('Income (ACU)',0,0); ctx.restore();
+
+  // Right Y axis
+  if (validBals.length>0) {
+    const br=maxBal-minBal||1;
+    ctx.fillStyle='#22c55e'; ctx.textAlign='left';
+    for(let i=0;i<=4;i++){const v=maxBal-(br/4)*i; ctx.fillText(v.toFixed(1),W-PAD.right+6,PAD.top+(gH/4)*i+4);}
+    ctx.save(); ctx.translate(W-14,PAD.top+gH/2); ctx.rotate(Math.PI/2);
+    ctx.textAlign='center'; ctx.fillStyle='#22c55e'; ctx.font='10px Inter,sans-serif'; ctx.fillText('Balance (ACU)',0,0); ctx.restore();
+  }
+
+  // X axis labels
+  ctx.fillStyle='#64748b'; ctx.textAlign='center'; ctx.font='10px Inter,sans-serif';
+  const le=Math.max(1,Math.ceil(n/8));
+  points.forEach((p,i) => { if(i%le===0||i===n-1) ctx.fillText(p.date,xOf(i),H-PAD.bottom+14); });
+
+  // Axes
+  ctx.strokeStyle='#243050'; ctx.lineWidth=1;
+  [[PAD.left,PAD.top,PAD.left,PAD.top+gH],[PAD.left,PAD.top+gH,W-PAD.right,PAD.top+gH],[W-PAD.right,PAD.top,W-PAD.right,PAD.top+gH]]
+    .forEach(([x1,y1,x2,y2])=>{ ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke(); });
+
+  // Legend
+  const lx=PAD.left+10, ly=PAD.top+10;
+  ctx.fillStyle='#4f8ef7'; ctx.fillRect(lx,ly,16,3);
+  ctx.fillStyle='#e2e8f0'; ctx.textAlign='left'; ctx.font='10px Inter,sans-serif'; ctx.fillText('Cumulative Income',lx+20,ly+4);
+  if(validBals.length>0){ctx.fillStyle='#22c55e'; ctx.fillRect(lx+160,ly,16,3); ctx.fillStyle='#e2e8f0'; ctx.fillText('Manager Balance',lx+180,ly+4);}
+
+  // Pills
+  const totalIncome = points[points.length-1]?.income||0;
+  const currentBal  = points[points.length-1]?.bal||null;
+  document.getElementById('pillAcu').textContent = totalIncome.toFixed(4)+' ACU earned';
+  if(price>0){
+    document.getElementById('pillPrice').textContent='ACU $'+price.toFixed(4);
+    document.getElementById('pillUsd').textContent='$'+(totalIncome*price).toFixed(2)+' earned'+(currentBal?' · Bal $'+(currentBal*price).toFixed(2):'');
+  }
+}
+
+async function updateChart(acuPrice, lastEpochPayout, managerBalance) {
+  acuPriceCurrent = acuPrice;
+  await loadHistory();
+  drawChart();
+}
+
+window.addEventListener('resize', () => drawChart());
+
+// Set dashboard URL dynamically
+document.getElementById('dashUrl').textContent = 'Mainnet Dashboard — ' + window.location.origin;
+
+fetchData();
+setInterval(fetchData, 5 * 60 * 1000); // poll UI every 5 min
+</script>
+</body>
+</html>

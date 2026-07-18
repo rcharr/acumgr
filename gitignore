@@ -1,0 +1,5 @@
+node_modules/
+server/config.json
+*.log
+.env
+server/history.json

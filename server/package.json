@@ -1,0 +1,16 @@
+{
+  "name": "acumgr",
+  "version": "1.0.0",
+  "description": "Acurast Processor Fleet Manager — local dashboard for ACU processor operators",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "setup": "node setup.js"
+  },
+  "dependencies": {
+    "@polkadot/api": "^12.4.2",
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "ws": "^8.16.0"
+  }
+}
