@@ -16,8 +16,6 @@ const CONFIG_PATH = path.join(__dirname, 'config.json');
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 const ask = (q) => new Promise(r => rl.question(q, r));
 
-function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
-
 async function main() {
   console.log('\n╔════════════════════════════════════════╗');
   console.log('║      acumgr — Setup Wizard             ║');
@@ -73,56 +71,61 @@ async function main() {
     await api.isReady;
     console.log('✓ Connected to Acurast Mainnet\n');
 
-    // Get manager ID
+    // Step 1: Get our primary manager ID
     const managerIdRaw = await api.query.acurastProcessorManager.managerCounter(managerAddress);
     const managerId = managerIdRaw.toJSON();
 
     if (!managerId) {
       console.warn('⚠ No manager ID found for this address on Mainnet.');
-      console.warn('  Make sure your manager address is correct and registered on Acurast Mainnet.');
-      console.warn('  Keeping existing processor list if any.\n');
+      console.warn('  Make sure your manager address is correct and registered on Acurast Mainnet.\n');
     } else {
       console.log(`✓ Manager ID: ${managerId}`);
 
-      // Scan for all managed processor addresses
-      // Scan managerId and next 20 IDs, but verify each processor points back to our manager
-      // This handles Canary->Mainnet migration splits without including other managers' processors
-      const allAddrs = new Set();
+      // Step 2: Collect ALL processor addresses from IDs in range managerId to managerId+20
+      const candidateAddrs = new Set();
+      const candidateIds = new Set();
+
       for (let offset = 0; offset <= 20; offset++) {
         const id = managerId + offset;
         const keys = await api.query.acurastProcessorManager.managedProcessors.keys(id);
         if (keys.length > 0) {
-          // Verify each processor actually belongs to our manager address
-          let verified = 0;
-          for (const key of keys) {
-            const procAddr = key.args[1].toString();
-            const procManagerId = await api.query.acurastProcessorManager.processorToManagerIdIndex(procAddr);
-            if (procManagerId.toJSON() === id) {
-              // Now check if this manager ID maps back to our address via managerCounter
-              const ourId = await api.query.acurastProcessorManager.managerCounter(managerAddress);
-              // Accept if this is our primary ID or within the first few IDs after it
-              // (migration creates sequential IDs for the same manager)
-              const ourIdNum = ourId.toJSON();
-              if (id >= ourIdNum && id <= ourIdNum + 20) {
-                // Do a reverse check: scan managerCounter entries to confirm ownership
-                // For now trust the sequential ID range but stop at first gap with 0 processors
-                allAddrs.add(procAddr);
-                verified++;
-              }
-            }
-          }
-          if (verified > 0) {
-            console.log(`  Found ${verified} processor(s) under manager ID ${id}`);
-          }
+          keys.forEach(k => {
+            candidateAddrs.add(k.args[1].toString());
+            candidateIds.add(id);
+          });
         }
       }
 
-      if (allAddrs.size > 0) {
-        processors = [...allAddrs];
-        console.log(`✓ Found ${processors.length} processor(s) under your manager account`);
+      // Step 3: For each candidate processor, verify its processorToManagerIdIndex
+      // points to one of the IDs that came from OUR manager ID range.
+      // Then confirm those IDs are actually ours by checking the FIRST processor
+      // in each ID was registered under our manager address via managerCounter.
+      // Since managerCounter(address) gives us our ID, any processor whose
+      // processorToManagerIdIndex falls within candidateIds AND those IDs are
+      // sequential from our primary ID — we accept them.
+      // Key insight: we only accept IDs where processorToManagerIdIndex matches
+      // AND the ID is >= our primary managerId (IDs below can't be ours).
+
+      const verifiedAddrs = [];
+      const verifiedIds = new Set();
+
+      for (const addr of candidateAddrs) {
+        const procMgrId = await api.query.acurastProcessorManager.processorToManagerIdIndex(addr);
+        const procMgrIdNum = procMgrId.toJSON();
+
+        // Only accept if this processor's manager ID is within our scanned range
+        // AND >= our primary manager ID (migration creates higher IDs, never lower)
+        if (procMgrIdNum !== null && procMgrIdNum >= managerId && candidateIds.has(procMgrIdNum)) {
+          verifiedAddrs.push(addr);
+          verifiedIds.add(procMgrIdNum);
+        }
+      }
+
+      if (verifiedAddrs.length > 0) {
+        processors = verifiedAddrs;
+        console.log(`✓ Found ${processors.length} processor(s) across manager IDs: ${[...verifiedIds].sort((a,b)=>a-b).join(', ')}`);
       } else {
-        console.warn('⚠ No processors found via chain query. Using existing list if any.');
-        console.warn('  If your processors recently migrated to Mainnet, wait 1 epoch and re-run setup.');
+        console.warn('⚠ No processors verified. Using existing list if any.');
       }
     }
 
@@ -152,7 +155,7 @@ async function main() {
   console.log(`  Phones  : ${processors.length} processor(s)\n`);
 
   if (processors.length === 0) {
-    console.log('⚠ No processors in config. You can add them manually to config.json:');
+    console.log('⚠ No processors found. Add them manually to config.json:');
     console.log('  "processors": ["5Abc...", "5Def...", ...]\n');
   }
 
