@@ -149,10 +149,9 @@ npm --version
 
 ### Step 3 — Run setup
 
-The setup wizard connects to the Acurast Mainnet chain, finds all processor addresses linked to your manager account, and writes `config.json`.
+The setup wizard asks for your manager address and basic settings, then writes `config.json`. Your processor addresses are captured automatically later when the Hub connects.
 
 ```bash
-# Install Node dependencies first (needed for setup only)
 cd server
 npm install
 node setup.js
@@ -165,11 +164,19 @@ Manager address (SS58): 5YourAddressHere...
 Port [9001]:
 Poll interval in minutes [30]:
 
-⏳ Connecting to Acurast Mainnet to discover your processors...
-✓ Connected to Acurast Mainnet
-✓ Manager ID: 42
-✓ Found 60 processor(s) under your manager account
+How would you like to provide your processor addresses?
+  1) Auto-discover from chain (~30 seconds, works for new Mainnet users)
+  2) Paste a list of addresses manually
+  3) Skip — processors captured automatically when Hub connects (recommended)
+
+Choice [1]: 3
+
 ✓ Config saved to config.json
+
+  Manager : 5YourAddressHere...
+  Port    : 9001
+  Poll    : every 30 minutes
+  Phones  : 0 (will be populated automatically)
 ```
 
 ### Step 4 — Build and launch
