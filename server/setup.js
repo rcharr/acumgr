@@ -51,6 +51,10 @@ async function main() {
   const pollStr = (await ask(`Poll interval in minutes [${defaultPoll}]: `)).trim();
   const pollMinutes = pollStr ? parseInt(pollStr) : defaultPoll;
 
+  // Ask for expected processor count to validate discovery
+  const expectedStr = (await ask('How many processor phones do you have? ')).trim();
+  const expectedCount = parseInt(expectedStr) || 0;
+
   rl.close();
 
   console.log('\n⏳ Connecting to Acurast Mainnet to discover your processors...');
@@ -96,29 +100,22 @@ async function main() {
         }
       }
 
-      // Step 3: For each candidate processor, verify its processorToManagerIdIndex
-      // points to one of the IDs that came from OUR manager ID range.
-      // Then confirm those IDs are actually ours by checking the FIRST processor
-      // in each ID was registered under our manager address via managerCounter.
-      // Since managerCounter(address) gives us our ID, any processor whose
-      // processorToManagerIdIndex falls within candidateIds AND those IDs are
-      // sequential from our primary ID — we accept them.
-      // Key insight: we only accept IDs where processorToManagerIdIndex matches
-      // AND the ID is >= our primary managerId (IDs below can't be ours).
-
+      // Step 3: Collect processors per ID and stop once we reach expected count
+      // This prevents over-collection from adjacent managers' IDs
       const verifiedAddrs = [];
       const verifiedIds = new Set();
 
-      for (const addr of candidateAddrs) {
-        const procMgrId = await api.query.acurastProcessorManager.processorToManagerIdIndex(addr);
-        const procMgrIdNum = procMgrId.toJSON();
-
-        // Only accept if this processor's manager ID is within our scanned range
-        // AND >= our primary manager ID (migration creates higher IDs, never lower)
-        if (procMgrIdNum !== null && procMgrIdNum >= managerId && candidateIds.has(procMgrIdNum)) {
-          verifiedAddrs.push(addr);
-          verifiedIds.add(procMgrIdNum);
-        }
+      // Sort IDs and collect processors, stopping at expected count
+      const sortedIds = [...candidateIds].sort((a, b) => a - b);
+      for (const id of sortedIds) {
+        const keys = await api.query.acurastProcessorManager.managedProcessors.keys(id);
+        keys.forEach(k => {
+          if (expectedCount === 0 || verifiedAddrs.length < expectedCount) {
+            verifiedAddrs.push(k.args[1].toString());
+            verifiedIds.add(id);
+          }
+        });
+        if (expectedCount > 0 && verifiedAddrs.length >= expectedCount) break;
       }
 
       if (verifiedAddrs.length > 0) {
