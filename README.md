@@ -77,7 +77,7 @@ npm --version
 Your manager address is the SS58 address configured in the Acurast Processor app on your phones. It starts with `5` and looks like:
 
 ```
-5HAERfhwNyZipegPFHgLTH5jLWUpMQHnUxAGhk6Y4hdLbS7K
+5YourManagerAddressHere...
 ```
 
 You can find it in:
@@ -149,16 +149,15 @@ You should see:
 ╚════════════════════════════════════════╝
 
 Dashboard  →  http://0.0.0.0:9001
-Hub endpoint →  http://192.168.x.x:9001/processor/check-in/processor/api/status/bulk
 Manager    →  5YourAddress...
-Processors →  60 configured
+Processors →  31 (from config.json)
 Poll       →  every 30 minutes
 
 [RPC] Connecting to wss://public-rpc.mainnet.acurast.com...
 [RPC] Connected: Acurast Mainnet
-[Price] ACU = $0.0752 (Gate.io)
-[Payout] Found: 1.6234 ACU at block 2143812
-[Refresh] Done — 60 processors, 58 online, balance: 142.3310 ACU
+[Price] ACU = $X.XXXX (Gate.io)
+[Payout] Found: X.XXXX ACU at block XXXXXXX
+[Refresh] Done — 31 processors, 29 online, balance: XXX.XXXX ACU
 ```
 
 ### Step 4 — Open the dashboard
