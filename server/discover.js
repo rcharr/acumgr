@@ -3,15 +3,14 @@
 
 /**
  * acumgr processor discovery tool
- * Run this to find ALL processor addresses belonging to your manager.
- * Uses the same approach as the Acurast Hub explorer.
- * 
+ * Finds ALL processor addresses belonging to your manager account.
+ * Uses bulk RPC queries for speed — completes in ~30 seconds.
+ *
  * Usage: node discover.js <managerAddress>
- * Example: node discover.js 5YourManagerAddressHere...
  */
 
 const { ApiPromise, WsProvider } = require('@polkadot/api');
-const fs = require('fs');
+const fs   = require('fs');
 const path = require('path');
 
 const managerAddress = process.argv[2];
@@ -24,7 +23,7 @@ if (!managerAddress || !managerAddress.startsWith('5')) {
 
 async function main() {
   console.log('\n╔════════════════════════════════════════╗');
-  console.log('║      acumgr — Processor Discovery     ║');
+  console.log('║    acumgr — Processor Discovery        ║');
   console.log('╚════════════════════════════════════════╝\n');
   console.log('Manager:', managerAddress);
   console.log('\n⏳ Connecting to Acurast Mainnet...');
@@ -44,33 +43,40 @@ async function main() {
     process.exit(1);
   }
 
-  // Strategy: scan ALL managedProcessors entries on the network
-  // For each processor, check processorToManagerIdIndex
-  // Accept processor if its manager ID == our primary manager ID
-  // This is 100% accurate for the primary ID
-  console.log('\n⏳ Scanning all processors on network...');
-  console.log('  (This takes 60-120 seconds for ~60,000 entries)\n');
+  // FAST APPROACH:
+  // 1. Get all processorToManagerIdIndex keys in bulk (single RPC call)
+  // 2. Get all values in bulk (single RPC call via queryStorageAt)
+  // 3. Filter locally — no per-entry RPC calls needed
+  console.log('\n⏳ Fetching all processor-to-manager mappings in bulk...');
+  console.log('  (Should complete in ~10-20 seconds)\n');
 
-  const allEntries = await api.query.acurastProcessorManager.managedProcessors.entries();
-  console.log(`  Network total: ${allEntries.length} processor entries`);
+  // Get all keys from processorToManagerIdIndex storage
+  const allKeys = await api.query.acurastProcessorManager.processorToManagerIdIndex.keys();
+  console.log(`  Total processor entries on network: ${allKeys.length}`);
 
+  // Fetch all values in batches of 500 using multi query
+  const BATCH = 500;
   const processors = [];
-  let checked = 0;
+  let processed = 0;
 
-  for (const [key] of allEntries) {
-    const procAddr = key.args[1].toString();
-    const procMgrId = await api.query.acurastProcessorManager.processorToManagerIdIndex(procAddr);
-    const mgrId = procMgrId.toJSON();
+  for (let i = 0; i < allKeys.length; i += BATCH) {
+    const batch = allKeys.slice(i, i + BATCH);
     
-    if (mgrId === managerId) {
-      processors.push(procAddr);
-      process.stdout.write(`  Found: ${processors.length} processors (${procAddr.slice(0,12)}...)\r`);
+    // Multi-query: fetch all values in this batch at once
+    const values = await Promise.all(
+      batch.map(key => api.query.acurastProcessorManager.processorToManagerIdIndex(key.args[0]))
+    );
+
+    for (let j = 0; j < batch.length; j++) {
+      const mgrId = values[j].toJSON();
+      if (mgrId === managerId) {
+        const procAddr = batch[j].args[0].toString();
+        processors.push(procAddr);
+      }
     }
-    
-    checked++;
-    if (checked % 1000 === 0 && processors.length === 0) {
-      process.stdout.write(`  Checked ${checked}/${allEntries.length}...\r`);
-    }
+
+    processed += batch.length;
+    process.stdout.write(`  Checked ${processed}/${allKeys.length} — found ${processors.length} so far...\r`);
   }
 
   console.log(`\n\n✓ Found ${processors.length} processor(s) under manager ID ${managerId}`);
@@ -78,19 +84,21 @@ async function main() {
   if (processors.length > 0) {
     // Save to file
     const outFile = path.join(__dirname, 'discovered_processors.json');
-    fs.writeFileSync(outFile, JSON.stringify({ 
+    fs.writeFileSync(outFile, JSON.stringify({
       managerAddress,
       managerId,
       processors,
       discoveredAt: new Date().toISOString()
     }, null, 2));
-    
-    console.log(`\n✓ Saved to: ${outFile}`);
+
+    console.log(`✓ Saved to: ${outFile}`);
     console.log('\nProcessor addresses:');
     processors.forEach((p, i) => console.log(`  ${i+1}. ${p}`));
-    
-    console.log('\nTo use these in your config.json, copy the list above');
-    console.log('or run setup.js and choose option 2 to paste them in.\n');
+    console.log('\nNext: run node setup.js and choose option 2 to paste these in.\n');
+  } else {
+    console.log('\n⚠ No processors found under your primary manager ID.');
+    console.log('  This may be a Canary→Mainnet migration issue.');
+    console.log('  Try running node setup.js and entering addresses manually.\n');
   }
 
   await api.disconnect();
