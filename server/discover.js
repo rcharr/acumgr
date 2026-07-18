@@ -4,7 +4,6 @@
 /**
  * acumgr processor discovery tool
  * Finds ALL processor addresses belonging to your manager account.
- * Uses bulk RPC queries for speed — completes in ~30 seconds.
  *
  * Usage: node discover.js <managerAddress>
  */
@@ -43,62 +42,64 @@ async function main() {
     process.exit(1);
   }
 
-  // FAST APPROACH:
-  // 1. Get all processorToManagerIdIndex keys in bulk (single RPC call)
-  // 2. Get all values in bulk (single RPC call via queryStorageAt)
-  // 3. Filter locally — no per-entry RPC calls needed
-  console.log('\n⏳ Fetching all processor-to-manager mappings in bulk...');
-  console.log('  (Should complete in ~10-20 seconds)\n');
+  // APPROACH: use managedProcessors.keys(managerId) — this directly returns
+  // all processor addresses under a specific manager ID in ONE RPC call.
+  // Then repeat for the next few IDs to catch migration splits.
+  console.log('\n⏳ Fetching processor keys for your manager IDs...\n');
 
-  // Get all keys from processorToManagerIdIndex storage
-  const allKeys = await api.query.acurastProcessorManager.processorToManagerIdIndex.keys();
-  console.log(`  Total processor entries on network: ${allKeys.length}`);
+  const processors = new Set();
+  const foundIds = [];
 
-  // Fetch all values in batches of 500 using multi query
-  const BATCH = 500;
-  const processors = [];
-  let processed = 0;
-
-  for (let i = 0; i < allKeys.length; i += BATCH) {
-    const batch = allKeys.slice(i, i + BATCH);
+  // Scan managerId through managerId+30, use keys() per ID (fast single call each)
+  for (let offset = 0; offset <= 30; offset++) {
+    const id = managerId + offset;
+    const keys = await api.query.acurastProcessorManager.managedProcessors.keys(id);
     
-    // Multi-query: fetch all values in this batch at once
-    const values = await Promise.all(
-      batch.map(key => api.query.acurastProcessorManager.processorToManagerIdIndex(key.args[0]))
-    );
+    if (keys.length > 0) {
+      // Now verify these processors actually point back to this ID
+      // Fetch all their manager IDs in parallel
+      const addrs = keys.map(k => k.args[1].toString());
+      const verifyResults = await Promise.all(
+        addrs.map(addr => api.query.acurastProcessorManager.processorToManagerIdIndex(addr))
+      );
 
-    for (let j = 0; j < batch.length; j++) {
-      const mgrId = values[j].toJSON();
-      if (mgrId === managerId) {
-        const procAddr = batch[j].args[0].toString();
-        processors.push(procAddr);
+      let count = 0;
+      for (let i = 0; i < addrs.length; i++) {
+        const procMgrId = verifyResults[i].toJSON();
+        // Only accept if this processor points back to the same ID we queried
+        // AND that ID >= our primary managerId (migration creates higher IDs)
+        if (procMgrId === id) {
+          processors.add(addrs[i]);
+          count++;
+        }
+      }
+
+      if (count > 0) {
+        foundIds.push(id);
+        console.log(`  Manager ID ${id}: ${count} verified processor(s)`);
       }
     }
-
-    processed += batch.length;
-    process.stdout.write(`  Checked ${processed}/${allKeys.length} — found ${processors.length} so far...\r`);
   }
 
-  console.log(`\n\n✓ Found ${processors.length} processor(s) under manager ID ${managerId}`);
+  const processorList = [...processors];
+  console.log(`\n✓ Found ${processorList.length} verified processor(s)`);
+  console.log(`  Across manager IDs: ${foundIds.join(', ')}`);
 
-  if (processors.length > 0) {
-    // Save to file
+  if (processorList.length > 0) {
     const outFile = path.join(__dirname, 'discovered_processors.json');
     fs.writeFileSync(outFile, JSON.stringify({
       managerAddress,
       managerId,
-      processors,
+      managerIds: foundIds,
+      processors: processorList,
       discoveredAt: new Date().toISOString()
     }, null, 2));
 
-    console.log(`✓ Saved to: ${outFile}`);
+    console.log(`\n✓ Saved to: ${outFile}`);
     console.log('\nProcessor addresses:');
-    processors.forEach((p, i) => console.log(`  ${i+1}. ${p}`));
-    console.log('\nNext: run node setup.js and choose option 2 to paste these in.\n');
-  } else {
-    console.log('\n⚠ No processors found under your primary manager ID.');
-    console.log('  This may be a Canary→Mainnet migration issue.');
-    console.log('  Try running node setup.js and entering addresses manually.\n');
+    processorList.forEach((p, i) => console.log(`  ${i+1}. ${p}`));
+    console.log('\nTo use in setup: run node setup.js and choose option 2 to paste these in.\n');
+    console.log('Or copy directly into config.json under "processors": [...]\n');
   }
 
   await api.disconnect();
