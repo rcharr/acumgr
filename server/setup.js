@@ -85,9 +85,10 @@ async function main() {
       console.log(`✓ Manager ID: ${managerId}`);
 
       // Scan for all managed processor addresses
-      // Scan managerId and next 5 IDs in case migration split processors across multiple manager IDs
+      // Scan managerId and next 20 IDs in case migration split processors across multiple manager IDs
+      // Acurast Canary->Mainnet migration is known to split fleets across many consecutive IDs
       const allAddrs = new Set();
-      for (let offset = 0; offset <= 5; offset++) {
+      for (let offset = 0; offset <= 20; offset++) {
         const id = managerId + offset;
         const keys = await api.query.acurastProcessorManager.managedProcessors.keys(id);
         if (keys.length > 0) {
