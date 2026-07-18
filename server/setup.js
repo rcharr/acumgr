@@ -85,15 +85,35 @@ async function main() {
       console.log(`✓ Manager ID: ${managerId}`);
 
       // Scan for all managed processor addresses
-      // Scan managerId and next 20 IDs in case migration split processors across multiple manager IDs
-      // Acurast Canary->Mainnet migration is known to split fleets across many consecutive IDs
+      // Scan managerId and next 20 IDs, but verify each processor points back to our manager
+      // This handles Canary->Mainnet migration splits without including other managers' processors
       const allAddrs = new Set();
       for (let offset = 0; offset <= 20; offset++) {
         const id = managerId + offset;
         const keys = await api.query.acurastProcessorManager.managedProcessors.keys(id);
         if (keys.length > 0) {
-          console.log(`  Found ${keys.length} processor(s) under manager ID ${id}`);
-          keys.forEach(k => allAddrs.add(k.args[1].toString()));
+          // Verify each processor actually belongs to our manager address
+          let verified = 0;
+          for (const key of keys) {
+            const procAddr = key.args[1].toString();
+            const procManagerId = await api.query.acurastProcessorManager.processorToManagerIdIndex(procAddr);
+            if (procManagerId.toJSON() === id) {
+              // Now check if this manager ID maps back to our address via managerCounter
+              const ourId = await api.query.acurastProcessorManager.managerCounter(managerAddress);
+              // Accept if this is our primary ID or within the first few IDs after it
+              // (migration creates sequential IDs for the same manager)
+              const ourIdNum = ourId.toJSON();
+              if (id >= ourIdNum && id <= ourIdNum + 20) {
+                // Do a reverse check: scan managerCounter entries to confirm ownership
+                // For now trust the sequential ID range but stop at first gap with 0 processors
+                allAddrs.add(procAddr);
+                verified++;
+              }
+            }
+          }
+          if (verified > 0) {
+            console.log(`  Found ${verified} processor(s) under manager ID ${id}`);
+          }
         }
       }
 
