@@ -99,6 +99,7 @@
   <div class="header-right">
     <span class="last-updated" id="lastUpdated">—</span>
     <button id="refreshBtn" onclick="manualRefresh()">↻ Refresh</button>
+    <button id="learnBtn" onclick="enableLearnMode()" style="background:var(--yellow);color:#000;border:none;border-radius:7px;padding:8px 16px;cursor:pointer;font-size:13px;font-weight:600;">⚡ Learn Processors</button>
   </div>
 </header>
 <main>
@@ -108,6 +109,9 @@
     <button class="copy-btn" onclick="copyAddr()">Copy</button>
   </div>
   <div class="error-banner" id="errBanner"></div>
+  <div id="learnBanner" style="background:rgba(234,179,8,.1);border:1px solid rgba(234,179,8,.4);color:var(--yellow);border-radius:var(--radius);padding:12px 18px;margin-bottom:18px;font-size:13px;display:none;">
+    ⚡ <strong>Learning mode active</strong> — Now open <a href="https://hub.acurast.com/phones" target="_blank" style="color:var(--yellow)">hub.acurast.com/phones</a> in a new tab. The Hub will send your processor list automatically.
+  </div>
   <div class="net-bar">
     <span class="conn-dot" id="dotMainnet"></span>
     <span class="net-label">Mainnet</span>
@@ -304,6 +308,32 @@ async function fetchData(){
     document.getElementById('loading').style.display='none';
   } catch(e) {
     console.error('fetchData error:', e);
+  }
+}
+
+async function enableLearnMode(){
+  const btn = document.getElementById('learnBtn');
+  btn.disabled = true;
+  btn.textContent = '⚡ Waiting...';
+  try {
+    await fetch('/api/learn', {method:'POST'});
+    document.getElementById('learnBanner').style.display = 'block';
+    // Poll until learning mode is done
+    const poll = setInterval(async () => {
+      const res = await fetch('/api/learn');
+      const data = await res.json();
+      if (!data.learningMode) {
+        clearInterval(poll);
+        document.getElementById('learnBanner').style.display = 'none';
+        btn.disabled = false;
+        btn.textContent = '⚡ Learn Processors';
+        alert('✓ Captured ' + data.processorCount + ' processors! Dashboard will refresh.');
+        await fetchData();
+      }
+    }, 2000);
+  } catch(e) {
+    btn.disabled = false;
+    btn.textContent = '⚡ Learn Processors';
   }
 }
 
