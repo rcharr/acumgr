@@ -132,7 +132,22 @@ cd acumgr
 # OR download the zip and extract it
 ```
 
-### Step 2 — Run setup
+### Step 2 — Install Node.js (required for setup wizard only)
+
+```bash
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt-get install -y nodejs
+```
+
+Verify:
+```bash
+node --version
+npm --version
+```
+
+> **Note:** Node.js is only needed to run `setup.js` once. After that, everything runs inside Docker and Node.js is no longer needed on the host.
+
+### Step 3 — Run setup
 
 The setup wizard connects to the Acurast Mainnet chain, finds all processor addresses linked to your manager account, and writes `config.json`.
 
@@ -157,7 +172,7 @@ Poll interval in minutes [30]:
 ✓ Config saved to config.json
 ```
 
-### Step 3 — Build and launch
+### Step 4 — Build and launch
 
 ```bash
 docker compose up -d --build
@@ -187,7 +202,7 @@ Poll       →  every 30 minutes
 [Refresh] Done — 31 processors, 29 online, balance: XXX.XXXX ACU
 ```
 
-### Step 4 — Open the dashboard
+### Step 5 — Open the dashboard
 
 Open a browser on any device on your local network:
 
