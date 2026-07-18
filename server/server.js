@@ -27,6 +27,7 @@ try {
 
 const MANAGER_ADDRESS = cfg.managerAddress;
 const ALL_PROCESSORS  = cfg.processors || [];
+// Note: ALL_PROCESSORS is mutated in learning mode
 const PORT            = cfg.port || 9001;
 const POLL_INTERVAL   = (cfg.pollMinutes || 30) * 60 * 1000;
 const RPC_MAINNET     = cfg.rpc || 'wss://public-rpc.mainnet.acurast.com';
@@ -46,6 +47,7 @@ let lastEpochPayout = null;
 let acuPrice        = null;
 let lastUpdated     = null;
 let rpcConnected    = false;
+let learningMode    = false;  // when true, captures processor addresses from Hub requests
 
 // ─── History (server-side, persisted to disk) ──────────────────────────────────
 function loadHistory() {
@@ -250,6 +252,19 @@ app.get('/processor/check-in/processor/api/status/bulk', (req, res) => {
   const requested = req.query.addresses
     ? req.query.addresses.split(',').map(a => a.trim())
     : ALL_PROCESSORS;
+
+  // Learning mode: Hub just told us all processor addresses — save to config
+  if (learningMode && requested.length > 0) {
+    console.log('[Learn] Hub sent', requested.length, 'processor address(es) — saving to config...');
+    cfg.processors = requested;
+    ALL_PROCESSORS.length = 0;
+    requested.forEach(a => ALL_PROCESSORS.push(a));
+    fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2));
+    learningMode = false;
+    console.log('[Learn] Config updated with', requested.length, 'processors. Triggering refresh...');
+    refresh();
+  }
+
   const result = {};
   for (const addr of requested) {
     const cached = processorCache[addr];
@@ -304,6 +319,18 @@ app.get('/api/config', (req, res) => {
     pollMinutes: cfg.pollMinutes || 30,
     rpc: RPC_MAINNET,
   });
+});
+
+// Learning mode — enable via POST /api/learn
+// Then open hub.acurast.com/phones and the Hub will send all processor addresses
+app.post('/api/learn', (req, res) => {
+  learningMode = true;
+  console.log('[Learn] Learning mode enabled — waiting for Hub to call /processor/check-in/processor/api/status/bulk');
+  res.json({ ok: true, message: 'Learning mode enabled. Open hub.acurast.com/phones to capture your processor addresses.' });
+});
+
+app.get('/api/learn', (req, res) => {
+  res.json({ ok: true, learningMode, processorCount: ALL_PROCESSORS.length });
 });
 
 app.post('/api/refresh', (req, res) => {
