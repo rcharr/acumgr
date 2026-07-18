@@ -36,7 +36,7 @@ async function main() {
   )).trim() || defaultAddr;
 
   if (!managerAddress || !managerAddress.startsWith('5')) {
-    console.error('\n✗ Invalid address. Must be a Substrate SS58 address starting with "5".');
+    console.error('\n✗ Invalid address. Must start with "5".');
     process.exit(1);
   }
 
@@ -50,84 +50,105 @@ async function main() {
   const pollStr = (await ask(`Poll interval in minutes [${defaultPoll}]: `)).trim();
   const pollMinutes = pollStr ? parseInt(pollStr) : defaultPoll;
 
-  // How many processors
-  const expectedStr = (await ask('How many processor phones do you have? ')).trim();
-  const expectedCount = parseInt(expectedStr) || 0;
-
-  rl.close();
-
-  console.log('\n⏳ Connecting to Acurast Mainnet to discover your processors...');
-
-  let ApiPromise, WsProvider;
-  try {
-    ({ ApiPromise, WsProvider } = require('@polkadot/api'));
-  } catch(_) {
-    console.error('✗ @polkadot/api not installed. Run: npm install');
-    process.exit(1);
-  }
+  // Ask how they want to provide processor addresses
+  console.log('\nHow would you like to provide your processor addresses?');
+  console.log('  1) Auto-discover from chain (recommended, takes ~60 seconds)');
+  console.log('  2) Paste a list of addresses manually');
+  console.log('  3) Skip for now (add to config.json manually later)\n');
+  const method = (await ask('Choice [1]: ')).trim() || '1';
 
   let processors = existing.processors || [];
 
-  try {
-    const provider = new WsProvider('wss://public-rpc.mainnet.acurast.com', 2500, {}, 20_000);
-    const api = await ApiPromise.create({ provider });
-    await api.isReady;
-    console.log('✓ Connected to Acurast Mainnet\n');
-
-    // Get our primary manager ID
-    const managerIdRaw = await api.query.acurastProcessorManager.managerCounter(managerAddress);
-    const managerId = managerIdRaw.toJSON();
-
-    if (!managerId) {
-      console.warn('⚠ No manager ID found for this address on Mainnet.');
-    } else {
-      console.log(`✓ Manager ID: ${managerId}`);
-
-      // Scan forward from our manager ID collecting processors
-      // Stop when we've found expectedCount OR hit 3 consecutive empty IDs
-      const found = [];
-      let emptyStreak = 0;
-
-      for (let offset = 0; offset <= 50 && found.length < expectedCount; offset++) {
-        const id = managerId + offset;
-        const keys = await api.query.acurastProcessorManager.managedProcessors.keys(id);
-
-        if (keys.length > 0) {
-          emptyStreak = 0;
-          // Verify each processor's manager ID matches this ID (not someone else's)
-          for (const key of keys) {
-            if (found.length >= expectedCount) break;
-            const addr = key.args[1].toString();
-            const procMgrId = await api.query.acurastProcessorManager.processorToManagerIdIndex(addr);
-            if (procMgrId.toJSON() === id) {
-              found.push(addr);
-            }
-          }
-          console.log(`  Manager ID ${id}: ${keys.length} processor(s) found`);
-        } else {
-          emptyStreak++;
-          if (emptyStreak >= 3) break;
-        }
-      }
-
-      if (found.length > 0) {
-        processors = found;
-        console.log(`\n✓ Found ${processors.length} of ${expectedCount} processor(s)`);
-        if (processors.length < expectedCount) {
-          console.log(`⚠ Only found ${processors.length}/${expectedCount} processors.`);
-          console.log('  You can add the remaining addresses manually to config.json');
-          console.log('  under the "processors" array.\n');
-        }
+  if (method === '2') {
+    // Manual entry
+    console.log('\nPaste your processor addresses one per line.');
+    console.log('Press Enter on a blank line when done:\n');
+    const addrs = [];
+    while (true) {
+      const line = (await ask('')).trim();
+      if (!line) break;
+      if (line.startsWith('5') && line.length > 40) {
+        addrs.push(line);
+        console.log(`  ✓ Added (${addrs.length})`);
       } else {
-        console.warn('⚠ No processors found. Check your manager address and try again.');
+        console.log('  ✗ Invalid address, skipped');
       }
     }
+    processors = addrs;
+    console.log(`\n✓ ${processors.length} processor(s) added manually`);
 
-    await api.disconnect();
-  } catch(err) {
-    console.warn('\n⚠ Could not connect to chain:', err.message);
-    console.warn('  Using existing processor list.\n');
+  } else if (method === '3') {
+    console.log('\n✓ Skipping processor discovery.');
+    console.log('  After launching acumgr:');
+    console.log('  1. Open http://<your-pi-ip>:9001 in your browser');
+    console.log('  2. Click the ⚡ Learn Processors button');
+    console.log('  3. Open hub.acurast.com/phones in another tab');
+    console.log('  4. The Hub will automatically send all your processor addresses!\n');
+
+  } else {
+    // Auto-discover from chain
+    rl.pause();
+    console.log('\n⏳ Connecting to Acurast Mainnet...');
+
+    let ApiPromise, WsProvider;
+    try {
+      ({ ApiPromise, WsProvider } = require('@polkadot/api'));
+    } catch(_) {
+      console.error('✗ @polkadot/api not installed. Run: npm install');
+      process.exit(1);
+    }
+
+    try {
+      const provider = new WsProvider('wss://public-rpc.mainnet.acurast.com', 2500, {}, 20_000);
+      const api = await ApiPromise.create({ provider });
+      await api.isReady;
+      console.log('✓ Connected to Acurast Mainnet\n');
+
+      const managerIdRaw = await api.query.acurastProcessorManager.managerCounter(managerAddress);
+      const managerId = managerIdRaw.toJSON();
+
+      if (!managerId) {
+        console.warn('⚠ No manager ID found. Check your address and try again.');
+      } else {
+        console.log(`✓ Manager ID: ${managerId}`);
+        console.log('⏳ Scanning network for your processors (~60 seconds)...\n');
+
+        const allEntries = await api.query.acurastProcessorManager.managedProcessors.entries();
+        console.log(`  Network total: ${allEntries.length} processors`);
+
+        const found = [];
+        let checked = 0;
+        for (const [key] of allEntries) {
+          const procAddr = key.args[1].toString();
+          const procMgrId = await api.query.acurastProcessorManager.processorToManagerIdIndex(procAddr);
+          if (procMgrId.toJSON() === managerId) {
+            found.push(procAddr);
+          }
+          checked++;
+          if (checked % 1000 === 0) process.stdout.write(`  Checked ${checked}/${allEntries.length}...\r`);
+        }
+
+        console.log(`\n✓ Found ${found.length} processor(s) under manager ID ${managerId}`);
+
+        if (found.length > 0) {
+          processors = found;
+          if (found.length < 31) {
+            console.log('\n⚠ If you have more processors than shown above, some may have been');
+            console.log('  registered under different manager IDs during the Canary→Mainnet');
+            console.log('  migration. Re-run setup and choose option 2 to add them manually.\n');
+          }
+        }
+      }
+
+      await api.disconnect();
+    } catch(err) {
+      console.warn('\n⚠ Chain query failed:', err.message);
+      console.warn('  Re-run setup and choose option 2 to enter addresses manually.\n');
+    }
+    rl.resume();
   }
+
+  rl.close();
 
   const config = {
     managerAddress,
@@ -148,6 +169,10 @@ async function main() {
   console.log(`  Poll    : every ${pollMinutes} minutes`);
   console.log(`  Phones  : ${processors.length} processor(s)\n`);
   console.log('Next step: docker compose up -d --build\n');
+  if (processors.length === 0) {
+    console.log('After launching, click ⚡ Learn Processors in the dashboard');
+    console.log('then open hub.acurast.com/phones to auto-capture your processor list.\n');
+  }
   process.exit(0);
 }
 
