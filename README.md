@@ -92,6 +92,33 @@ hostname -I | awk '{print $1}'
 
 ---
 
+## Getting Your Processor Addresses
+
+Before or after setup, you need your processor addresses. The most reliable method works for all users including those who migrated from Canary to Mainnet:
+
+### Method 1 — Network Tab (Recommended, works for everyone)
+
+1. Make sure acumgr is running on your Pi
+2. Set your management endpoint in the Hub to `http://<your-pi-ip>:9001`
+3. Open **Chrome** → go to `hub.acurast.com/phones`
+4. Open **DevTools** (Cmd+Option+I or F12) → click **Network** tab
+5. Type `bulk` in the filter box → refresh the page
+6. Click the request that appears → click **Headers** tab
+7. Copy the full **Request URL**
+8. Everything after `?addresses=` is your comma-separated processor list
+
+acumgr will also **automatically capture** this list the first time the Hub calls it — no manual steps needed after the endpoint is set.
+
+### Method 2 — Manual entry during setup
+
+Run `node setup.js` and choose option 2 to paste addresses one per line.
+
+### Method 3 — Auto-discovery (works for most new Mainnet users)
+
+Run `node setup.js` and choose option 1. Works perfectly if you joined Mainnet directly without migrating from Canary.
+
+---
+
 ## Installation
 
 ### Step 1 — Clone or download acumgr

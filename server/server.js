@@ -253,16 +253,17 @@ app.get('/processor/check-in/processor/api/status/bulk', (req, res) => {
     ? req.query.addresses.split(',').map(a => a.trim())
     : ALL_PROCESSORS;
 
-  // Learning mode: Hub just told us all processor addresses — save to config
-  if (learningMode && requested.length > 0) {
-    console.log('[Learn] Hub sent', requested.length, 'processor address(es) — saving to config...');
+  // Auto-learn: if we have no processors configured yet, capture any incoming list
+  // This works when Hub phones call us or when user uses the Network tab trick
+  if (requested.length > ALL_PROCESSORS.length && requested.length > 0) {
+    console.log('[Learn] Received', requested.length, 'processor address(es) — updating config...');
     cfg.processors = requested;
     ALL_PROCESSORS.length = 0;
     requested.forEach(a => ALL_PROCESSORS.push(a));
     fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2));
     learningMode = false;
     console.log('[Learn] Config updated with', requested.length, 'processors. Triggering refresh...');
-    refresh();
+    setTimeout(refresh, 2000);
   }
 
   const result = {};
@@ -307,6 +308,34 @@ app.get('/api/processors', (req, res) => {
   res.json({ ok: true, count: processors.length, processors, lastUpdated });
 });
 
+// Also handle the shorter path the Hub uses in some versions
+app.get('/processor/api/status/bulk', (req, res) => {
+  const requested = req.query.addresses
+    ? req.query.addresses.split(',').map(a => a.trim())
+    : ALL_PROCESSORS;
+
+  if (requested.length > ALL_PROCESSORS.length && requested.length > 0) {
+    console.log('[Learn] Received', requested.length, 'processor address(es) via short path — updating config...');
+    cfg.processors = requested;
+    ALL_PROCESSORS.length = 0;
+    requested.forEach(a => ALL_PROCESSORS.push(a));
+    fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2));
+    learningMode = false;
+    setTimeout(refresh, 2000);
+  }
+
+  const result = {};
+  for (const addr of requested) {
+    const cached = processorCache[addr];
+    result[addr] = {
+      status:   cached?.status ?? 'unknown',
+      lastSeen: cached?.lastHeartbeatTs ? new Date(cached.lastHeartbeatTs).toISOString() : null,
+      balance:  cached?.balance ?? null,
+    };
+  }
+  res.json(result);
+});
+
 app.get('/api/history', (req, res) => {
   res.json({ ok: true, history: loadHistory() });
 });
@@ -327,6 +356,27 @@ app.post('/api/learn', (req, res) => {
   learningMode = true;
   console.log('[Learn] Learning mode enabled — waiting for Hub to call /processor/check-in/processor/api/status/bulk');
   res.json({ ok: true, message: 'Learning mode enabled. Open hub.acurast.com/phones to capture your processor addresses.' });
+});
+
+// Accept processor addresses submitted from the browser bookmarklet
+app.post('/api/learn/submit', (req, res) => {
+  const { processors: submitted } = req.body;
+  if (!Array.isArray(submitted) || submitted.length === 0) {
+    return res.status(400).json({ ok: false, error: 'No addresses provided' });
+  }
+  const valid = submitted.filter(a => typeof a === 'string' && a.startsWith('5') && a.length > 40);
+  if (valid.length === 0) {
+    return res.status(400).json({ ok: false, error: 'No valid addresses found' });
+  }
+  console.log('[Learn] Received', valid.length, 'processor address(es) from bookmarklet');
+  cfg.processors = valid;
+  ALL_PROCESSORS.length = 0;
+  valid.forEach(a => ALL_PROCESSORS.push(a));
+  fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2));
+  learningMode = false;
+  console.log('[Learn] Config updated with', valid.length, 'processors. Triggering refresh...');
+  refresh();
+  res.json({ ok: true, count: valid.length });
 });
 
 app.get('/api/learn', (req, res) => {
