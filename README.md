@@ -2,7 +2,6 @@
 
 A self-hosted local dashboard for Acurast processor operators. Tracks your entire fleet of processor phones, shows live heartbeat status, compute scores, epoch rewards, manager balance, and a cumulative income chart with live ACU/USD pricing.
 
-![acumgr dashboard](docs/screenshot.png)
 
 ---
 
