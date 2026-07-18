@@ -94,28 +94,28 @@ hostname -I | awk '{print $1}'
 
 ## Getting Your Processor Addresses
 
-Before or after setup, you need your processor addresses. The most reliable method works for all users including those who migrated from Canary to Mainnet:
+acumgr discovers your processor addresses **automatically** — no manual steps needed for most users.
 
-### Method 1 — Network Tab (Recommended, works for everyone)
+### How it works
 
-1. Make sure acumgr is running on your Pi
-2. Set your management endpoint in the Hub to `http://<your-pi-ip>:9001`
-3. Open **Chrome** → go to `hub.acurast.com/phones`
-4. Open **DevTools** (Cmd+Option+I or F12) → click **Network** tab
-5. Type `bulk` in the filter box → refresh the page
-6. Click the request that appears → click **Headers** tab
-7. Copy the full **Request URL**
-8. Everything after `?addresses=` is your comma-separated processor list
+When you set your management endpoint in the Acurast Hub to your Pi's address, the Hub sends your complete processor list to acumgr every time you open the phones page. acumgr captures this automatically and saves it to config.json.
 
-acumgr will also **automatically capture** this list the first time the Hub calls it — no manual steps needed after the endpoint is set.
+**Steps:**
+1. Run setup and launch acumgr (see Installation below)
+2. In the Acurast Hub → Phones → Settings → set Management Endpoint to `http://<your-pi-ip>:9001`
+3. Open `hub.acurast.com/phones` — acumgr captures all your processors automatically
+4. Done — your dashboard will populate within seconds
 
-### Method 2 — Manual entry during setup
+### If auto-capture doesn't work
 
-Run `node setup.js` and choose option 2 to paste addresses one per line.
+Some users who migrated from Canary to Mainnet may need to provide addresses manually:
 
-### Method 3 — Auto-discovery (works for most new Mainnet users)
+- Run `node setup.js` and choose **option 2** to paste addresses one per line
+- To get your addresses: open `hub.acurast.com/phones` in Chrome, open DevTools → Network tab, filter by `bulk`, refresh the page, click the request that appears and copy everything after `?addresses=` in the URL
 
-Run `node setup.js` and choose option 1. Works perfectly if you joined Mainnet directly without migrating from Canary.
+### Auto-discovery (new Mainnet users only)
+
+If you joined Mainnet directly without migrating from Canary, run `node setup.js` and choose **option 1**. This queries the chain and finds all your processors automatically in ~30 seconds.
 
 ---
 
