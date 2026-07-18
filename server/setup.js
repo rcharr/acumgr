@@ -4,7 +4,7 @@
 /**
  * acumgr setup wizard
  * Generates config.json by prompting the user for their manager address
- * and discovering all processor addresses from the Acurast Mainnet chain.
+ * and discovering processor addresses from the Acurast Mainnet chain.
  */
 
 const readline = require('readline');
@@ -22,7 +22,6 @@ async function main() {
   console.log('║  Acurast Processor Fleet Manager       ║');
   console.log('╚════════════════════════════════════════╝\n');
 
-  // Load existing config if present
   let existing = {};
   if (fs.existsSync(CONFIG_PATH)) {
     try { existing = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')); }
@@ -51,7 +50,7 @@ async function main() {
   const pollStr = (await ask(`Poll interval in minutes [${defaultPoll}]: `)).trim();
   const pollMinutes = pollStr ? parseInt(pollStr) : defaultPoll;
 
-  // Ask for expected processor count to validate discovery
+  // How many processors
   const expectedStr = (await ask('How many processor phones do you have? ')).trim();
   const expectedCount = parseInt(expectedStr) || 0;
 
@@ -75,61 +74,59 @@ async function main() {
     await api.isReady;
     console.log('✓ Connected to Acurast Mainnet\n');
 
-    // Step 1: Get our primary manager ID
+    // Get our primary manager ID
     const managerIdRaw = await api.query.acurastProcessorManager.managerCounter(managerAddress);
     const managerId = managerIdRaw.toJSON();
 
     if (!managerId) {
       console.warn('⚠ No manager ID found for this address on Mainnet.');
-      console.warn('  Make sure your manager address is correct and registered on Acurast Mainnet.\n');
     } else {
       console.log(`✓ Manager ID: ${managerId}`);
 
-      // Step 2: Collect ALL processor addresses from IDs in range managerId to managerId+20
-      const candidateAddrs = new Set();
-      const candidateIds = new Set();
+      // Scan forward from our manager ID collecting processors
+      // Stop when we've found expectedCount OR hit 3 consecutive empty IDs
+      const found = [];
+      let emptyStreak = 0;
 
-      for (let offset = 0; offset <= 20; offset++) {
+      for (let offset = 0; offset <= 50 && found.length < expectedCount; offset++) {
         const id = managerId + offset;
         const keys = await api.query.acurastProcessorManager.managedProcessors.keys(id);
+
         if (keys.length > 0) {
-          keys.forEach(k => {
-            candidateAddrs.add(k.args[1].toString());
-            candidateIds.add(id);
-          });
+          emptyStreak = 0;
+          // Verify each processor's manager ID matches this ID (not someone else's)
+          for (const key of keys) {
+            if (found.length >= expectedCount) break;
+            const addr = key.args[1].toString();
+            const procMgrId = await api.query.acurastProcessorManager.processorToManagerIdIndex(addr);
+            if (procMgrId.toJSON() === id) {
+              found.push(addr);
+            }
+          }
+          console.log(`  Manager ID ${id}: ${keys.length} processor(s) found`);
+        } else {
+          emptyStreak++;
+          if (emptyStreak >= 3) break;
         }
       }
 
-      // Step 3: Collect processors per ID and stop once we reach expected count
-      // This prevents over-collection from adjacent managers' IDs
-      const verifiedAddrs = [];
-      const verifiedIds = new Set();
-
-      // Sort IDs and collect processors, stopping at expected count
-      const sortedIds = [...candidateIds].sort((a, b) => a - b);
-      for (const id of sortedIds) {
-        const keys = await api.query.acurastProcessorManager.managedProcessors.keys(id);
-        keys.forEach(k => {
-          if (expectedCount === 0 || verifiedAddrs.length < expectedCount) {
-            verifiedAddrs.push(k.args[1].toString());
-            verifiedIds.add(id);
-          }
-        });
-        if (expectedCount > 0 && verifiedAddrs.length >= expectedCount) break;
-      }
-
-      if (verifiedAddrs.length > 0) {
-        processors = verifiedAddrs;
-        console.log(`✓ Found ${processors.length} processor(s) across manager IDs: ${[...verifiedIds].sort((a,b)=>a-b).join(', ')}`);
+      if (found.length > 0) {
+        processors = found;
+        console.log(`\n✓ Found ${processors.length} of ${expectedCount} processor(s)`);
+        if (processors.length < expectedCount) {
+          console.log(`⚠ Only found ${processors.length}/${expectedCount} processors.`);
+          console.log('  You can add the remaining addresses manually to config.json');
+          console.log('  under the "processors" array.\n');
+        }
       } else {
-        console.warn('⚠ No processors verified. Using existing list if any.');
+        console.warn('⚠ No processors found. Check your manager address and try again.');
       }
     }
 
     await api.disconnect();
   } catch(err) {
     console.warn('\n⚠ Could not connect to chain:', err.message);
-    console.warn('  Using existing processor list. Re-run setup when connectivity is available.\n');
+    console.warn('  Using existing processor list.\n');
   }
 
   const config = {
@@ -145,17 +142,11 @@ async function main() {
 
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
 
-  console.log('\n✓ Config saved to config.json');
+  console.log('✓ Config saved to config.json');
   console.log(`\n  Manager : ${managerAddress}`);
   console.log(`  Port    : ${port}`);
   console.log(`  Poll    : every ${pollMinutes} minutes`);
   console.log(`  Phones  : ${processors.length} processor(s)\n`);
-
-  if (processors.length === 0) {
-    console.log('⚠ No processors found. Add them manually to config.json:');
-    console.log('  "processors": ["5Abc...", "5Def...", ...]\n');
-  }
-
   console.log('Next step: docker compose up -d --build\n');
   process.exit(0);
 }
